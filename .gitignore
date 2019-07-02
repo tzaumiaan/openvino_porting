@@ -5,3 +5,5 @@ __pycache__
 *.xml
 *.onnx
 *.npz
+*.caffemodel
+*.prototxt
