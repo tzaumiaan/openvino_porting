@@ -599,7 +599,9 @@ class NASNetALarge(nn.Module):
 
     def logits(self, features):
         x = self.relu(features)
-        x = self.avg_pool(x)
+        #x = self.avg_pool(x)
+        x = x.mean(3)
+        x = x.mean(2)
         x = x.view(x.size(0), -1)
         x = self.dropout(x)
         x = self.last_linear(x)
