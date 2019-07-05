@@ -305,9 +305,9 @@ class InceptionV4(nn.Module):
 
     def logits(self, features):
         #Allows image of any size to be processed
-        adaptiveAvgPoolWidth = int(features.shape[2])
-        x = F.avg_pool2d(features, kernel_size=adaptiveAvgPoolWidth)
-        x = x.view(x.size(0), -1)
+        #adaptiveAvgPoolWidth = features.shape[2]
+        #x = F.avg_pool2d(features, kernel_size=adaptiveAvgPoolWidth)
+        x = features.mean(3).mean(2)
         x = self.last_linear(x)
         return x
 
