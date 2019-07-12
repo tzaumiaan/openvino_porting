@@ -38,6 +38,9 @@ def get_model(model_name):
     # Pad layer not supported by OpenVINO
     from model_zoo.nasnet_mobile import nasnetamobile
     model = nasnetamobile(num_classes=1000, pretrained='imagenet')
+  elif model_name == 'efficientnet_b0':
+    from model_zoo.efficientnet_pytorch import EfficientNet
+    model = EfficientNet.from_pretrained('efficientnet-b0')
   elif model_name == 'efficientnet_b1':
     from model_zoo.efficientnet_pytorch import EfficientNet
     model = EfficientNet.from_pretrained('efficientnet-b1')
@@ -75,7 +78,7 @@ def get_trans(model_name):
     target_size = 224
     norm_mean = tf_slim_mean
     norm_std = tf_slim_std
-  elif model_name in ['efficientnet_b1', 'efficientnet_b4']:
+  elif model_name.startswith('efficientnet'):
     target_size = 240
     norm_mean = imagenet_mean
     norm_std = imagenet_std
