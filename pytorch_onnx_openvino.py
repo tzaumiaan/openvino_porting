@@ -20,16 +20,27 @@ def get_model(model_name):
     model = xception(pretrained='imagenet')
   elif model_name == 'resnet50':
     model = models.resnet50(pretrained=True)
+  elif model_name == 'resnet101':
+    model = models.resnet101(pretrained=True)
+  elif model_name == 'resnet152':
+    model = models.resnet152(pretrained=True)
   elif model_name == 'resnext50_32x4d':
     model = models.resnext50_32x4d(pretrained=True)
+  elif model_name == 'resnext101_32x8d':
+    model = models.resnext101_32x8d(pretrained=True)
   elif model_name == 'squeezenet1_0':
     model = models.squeezenet1_0(pretrained=True)
+  elif model_name == 'squeezenet1_1':
+    model = models.squeezenet1_1(pretrained=True)
   elif model_name == 'mobilenet_v2':
     from model_zoo.mobilenet import mobilenet_v2
     model = mobilenet_v2(pretrained=True)
   elif model_name == 'shufflenet_v2_x1_0':
     from model_zoo.shufflenetv2 import shufflenet_v2_x1_0
     model = shufflenet_v2_x1_0(pretrained=True)
+  elif model_name == 'shufflenet_v2_x0_5':
+    from model_zoo.shufflenetv2 import shufflenet_v2_x0_5
+    model = shufflenet_v2_x0_5(pretrained=True)
   elif model_name == 'nasnet_a_large':
     # Pad layer not supported by OpenVINO
     from model_zoo.nasnet import nasnetalarge
