@@ -82,9 +82,13 @@ def run_inference_onnx(model_name, npz_file):
 def convert_onnx_to_openvino(model_name):
   onnx_file = 'model_{}.onnx'.format(model_name)
   mo_py = '/opt/intel/openvino/deployment_tools/model_optimizer/mo.py'
+  options = ''
+  #options += ' --disable_fusing'
+  #options += ' --disable_resnet_optimization'
+  #options += ' --disable_gfusing'
   return_path = os.getcwd()
   os.chdir(OUTPUT_DIR)
-  os.system('python {} --input_model {}'.format(mo_py, onnx_file))
+  os.system('python {} {} --input_model {}'.format(mo_py, options, onnx_file))
   os.chdir(return_path)
 
 def load_openvino_model(device, model_xml, model_bin):
@@ -101,6 +105,27 @@ def load_openvino_model(device, model_xml, model_bin):
   input_blob = next(iter(net.inputs))
   output_blob = next(iter(net.outputs))
   return plugin, exec_net, input_blob, output_blob
+
+def print_perf_counts(exec_net):
+  perf_counts = exec_net.requests[0].get_perf_counts()
+  print('OpenVINO performance report')
+  print("{:<70} {:<15} {:<15} {:<15} {:<10}".format('name', 'layer_type', 'exet_type', 'status', 'real_time, us'))
+  layer_dict = {}
+  for layer, stats in perf_counts.items():
+    print("{:<70} {:<15} {:<15} {:<15} {:<10}".format(
+        layer, stats['layer_type'], stats['exec_type'], stats['status'], stats['real_time']))
+    if stats['layer_type'] in layer_dict:
+      layer_dict[stats['layer_type']] += int(stats['real_time'])
+    else:
+      layer_dict[stats['layer_type']] = int(stats['real_time'])
+  layer_types, layer_times = list(layer_dict.keys()), list(layer_dict.values())
+  layer_time_ratio = layer_times / np.sum(layer_times)
+  ranking = layer_time_ratio.argsort()[::-1]
+  print('Run time ranking by layer types')
+  print('{:<15} {:<10} {:<10}'.format('layer_type', 'real_time', 'percentage'))
+  for i in ranking:
+    print('{:<15} {:>10} {:>10.6f}%'.format(layer_types[i], layer_times[i], layer_time_ratio[i]*100))
+      
 
 def run_inference_openvino(model_name, npz_file):
   # input np array
@@ -143,6 +168,8 @@ def openvino_speed_test(model_name):
         print('trial {} takes {:0.4f}secs: logit={:.5f} label={}'.format(i, dt, logits[top1], labelmap[top1]))
 
   print('average inference time {:0.4f}secs'.format(exec_time/(n_trials-n_warmup)))
+  
+  print_perf_counts(exec_net)
   
   # clean up
   del plugin, exec_net
