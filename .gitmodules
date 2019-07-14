@@ -1,6 +1,0 @@
-[submodule "PytorchToCaffe"]
-	path = PytorchToCaffe
-	url = https://github.com/tzaumiaan/PytorchToCaffe
-[submodule "pytorch-OpCounter"]
-	path = pytorch-OpCounter
-	url = https://github.com/Lyken17/pytorch-OpCounter.git

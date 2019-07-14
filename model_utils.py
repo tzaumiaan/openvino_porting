@@ -71,9 +71,18 @@ def get_model(model_name):
   elif model_name == 'efficientnet_b1':
     from model_zoo.efficientnet_pytorch import EfficientNet
     model = EfficientNet.from_pretrained('efficientnet-b1')
+  elif model_name == 'efficientnet_b2':
+    from model_zoo.efficientnet_pytorch import EfficientNet
+    model = EfficientNet.from_pretrained('efficientnet-b2')
+  elif model_name == 'efficientnet_b3':
+    from model_zoo.efficientnet_pytorch import EfficientNet
+    model = EfficientNet.from_pretrained('efficientnet-b3')
   elif model_name == 'efficientnet_b4':
     from model_zoo.efficientnet_pytorch import EfficientNet
     model = EfficientNet.from_pretrained('efficientnet-b4')
+  elif model_name == 'efficientnet_b5':
+    from model_zoo.efficientnet_pytorch import EfficientNet
+    model = EfficientNet.from_pretrained('efficientnet-b5')
   else:
     raise ValueError('invalid model')
   
@@ -101,8 +110,15 @@ def get_trans(model_name):
     target_size = 224
     norm_mean = tf_slim_mean
     norm_std = tf_slim_std
+    norm_mean = imagenet_mean
+    norm_std = imagenet_std
   elif model_name.startswith('efficientnet'):
-    target_size = 240
+    if model_name.endswith('0'): target_size = 224
+    elif model_name.endswith('1'): target_size = 240
+    elif model_name.endswith('2'): target_size = 260
+    elif model_name.endswith('3'): target_size = 300
+    elif model_name.endswith('4'): target_size = 380
+    elif model_name.endswith('5'): target_size = 456
     norm_mean = imagenet_mean
     norm_std = imagenet_std
   else:

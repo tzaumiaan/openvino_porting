@@ -6,11 +6,13 @@ import onnx
 import onnxruntime
 from openvino.inference_engine import IENetwork, IEPlugin
 from datetime import datetime
+import os
 
-from model_utils import count_flops, get_model, get_trans
+from model_utils import count_param_size, count_flops, get_model, get_trans
 
-def run_inference_pytorch(image_file, model_name, model, trans):
-  from imagenet_labels import labelmap
+OUTPUT_DIR = 'model_converted'
+
+def run_inference_pytorch(image_file, model, trans):
   image = Image.open(image_file)
   image_tensor = trans(image)
   
@@ -22,13 +24,17 @@ def run_inference_pytorch(image_file, model_name, model, trans):
     model = model.cuda()
     image_tensor = image_tensor.cuda()
 
-  logits = model(image_tensor)
+  logits_tensor = model(image_tensor)
+  logits = logits_tensor.detach().numpy().squeeze()
+  return logits
 
-  k = 5
-  values, indices = torch.topk(logits, k)
-  print('pytorch inference result: {}'.format(model_name))
-  for i in range(k):
-    print(values[0][i].item(), labelmap[indices[0][i].item()])
+def print_logits(logits, model_name, framework_name, k=5):
+  from imagenet_labels import labelmap
+  softmax = np.exp(logits)/np.sum(np.exp(logits))
+  indices = logits.argsort()[::-1][:k]
+  print('{} inference result: {}'.format(framework_name, model_name))
+  for i in indices:
+    print('{:8.5f}({:5.3f}): {}'.format(logits[i], softmax[i], labelmap[i]))
 
 def image_to_npz(image_file, trans, npz_file):
   image = Image.open(image_file)
@@ -45,7 +51,7 @@ def image_to_npz(image_file, trans, npz_file):
   print('top left patch (green channel) = ', image_np[0,1,:2,:2])
 
 def convert_pytorch_to_onnx(model_name, model, target_size):
-  onnx_file = 'model_{}.onnx'.format(model_name)
+  onnx_file = os.path.join(OUTPUT_DIR, 'model_{}.onnx'.format(model_name))
   input_tensor = torch.ones([1, 3, target_size, target_size], dtype=torch.float32)
   # export the model
   torch.onnx.export(model.cpu(), input_tensor, onnx_file, export_params=True, verbose=False)
@@ -60,30 +66,26 @@ def convert_pytorch_to_onnx(model_name, model, target_size):
   onnx.checker.check_model(model_onnx) # will print nothing if nothing wrong
   
 def run_inference_onnx(model_name, npz_file):
-  from imagenet_labels import labelmap
   # input np array
   image_file = np.load(npz_file)
   image_np = image_file['arr_0']
   # model object
-  onnx_file = 'model_{}.onnx'.format(model_name)
+  onnx_file = os.path.join(OUTPUT_DIR, 'model_{}.onnx'.format(model_name))
   onnx_session = onnxruntime.InferenceSession(onnx_file)
   input_blob = onnx_session.get_inputs()[0].name
   output_blob = onnx_session.get_outputs()[0].name
   # run model
   res = onnx_session.run([output_blob], {input_blob: image_np})
   logits = res[0].squeeze()
-  # print result
-  k = 5
-  indices = logits.argsort()[::-1][:k]
-  print('onnx inference result: {}'.format(model_name))
-  for i in indices:
-    print(logits[i], labelmap[i])
+  return logits
 
 def convert_onnx_to_openvino(model_name):
-  import os
   onnx_file = 'model_{}.onnx'.format(model_name)
   mo_py = '/opt/intel/openvino/deployment_tools/model_optimizer/mo.py'
+  return_path = os.getcwd()
+  os.chdir(OUTPUT_DIR)
   os.system('python {} --input_model {}'.format(mo_py, onnx_file))
+  os.chdir(return_path)
 
 def load_openvino_model(device, model_xml, model_bin):
   plugin = IEPlugin(device=device, plugin_dirs=None)
@@ -101,32 +103,26 @@ def load_openvino_model(device, model_xml, model_bin):
   return plugin, exec_net, input_blob, output_blob
 
 def run_inference_openvino(model_name, npz_file):
-  from imagenet_labels import labelmap
   # input np array
   image_file = np.load(npz_file)
   image_np = image_file['arr_0']
   # load model
-  xml_file = 'model_{}.xml'.format(model_name)
-  bin_file = 'model_{}.bin'.format(model_name)
+  xml_file = os.path.join(OUTPUT_DIR, 'model_{}.xml'.format(model_name))
+  bin_file = os.path.join(OUTPUT_DIR, 'model_{}.bin'.format(model_name))
   plugin, exec_net, input_blob, output_blob = load_openvino_model('CPU', xml_file, bin_file)
   # run inference
   res = exec_net.infer(inputs={input_blob: image_np})
   logits = res[output_blob].squeeze()
-  # print result
-  k = 5
-  indices = logits.argsort()[::-1][:k]
-  print('openvino inference result: {}'.format(model_name))
-  for i in indices:
-    print(logits[i], labelmap[i])
   # clean up
   del plugin, exec_net
+  return logits
 
 def openvino_speed_test(model_name):
   from imagenet_labels import labelmap
   
   # load model
-  xml_file = 'model_{}.xml'.format(model_name)
-  bin_file = 'model_{}.bin'.format(model_name)
+  xml_file = os.path.join(OUTPUT_DIR, 'model_{}.xml'.format(model_name))
+  bin_file = os.path.join(OUTPUT_DIR, 'model_{}.bin'.format(model_name))
   plugin, exec_net, input_blob, output_blob = load_openvino_model('CPU', xml_file, bin_file)
 
   # inference speed test
@@ -144,7 +140,7 @@ def openvino_speed_test(model_name):
     if i >= n_warmup:
         exec_time += dt
     if i%100 == 0:
-        print('trial {} takes {:0.4f}secs: logit={} label={}'.format(i, dt, logits[top1], labelmap[top1]))
+        print('trial {} takes {:0.4f}secs: logit={:.5f} label={}'.format(i, dt, logits[top1], labelmap[top1]))
 
   print('average inference time {:0.4f}secs'.format(exec_time/(n_trials-n_warmup)))
   
@@ -161,26 +157,34 @@ if __name__=='__main__':
 
   npz_file = 'test_input.npz'
   
+  if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
+
   # pytorch
   print('==== pytorch ====')
   model = get_model(args.model_name)
+  n_params = count_param_size(model)
+  print('{} has {:.4f}M trainable parameters'.format(args.model_name, n_params/1e6))
   target_size, trans = get_trans(args.model_name)
   flops, n_params = count_flops(model, target_size)
-  print('{} has {:.4f}M trainable parameters'.format(args.model_name, n_params/1e6))
-  print('{} has {:.4f}G FLOPs'.format(args.model_name, flops/1e9))
-
-  run_inference_pytorch(args.image_file, args.model_name, model, trans)
+  print('THOP: {} has {:.4f}M trainable parameters'.format(args.model_name, n_params/1e6))
+  print('THOP: {} has {:.4f}G FLOPs'.format(args.model_name, flops/1e9))
+  logits_pytorch = run_inference_pytorch(args.image_file, model, trans)
+  print_logits(logits_pytorch, args.model_name, 'pytorch')
   
   # onnx
   print('==== onnx ====')
   image_to_npz(args.image_file, trans, npz_file)
   convert_pytorch_to_onnx(args.model_name, model, target_size)
-  run_inference_onnx(args.model_name, npz_file)
+  logits_onnx = run_inference_onnx(args.model_name, npz_file)
+  print_logits(logits_onnx, args.model_name, 'onnx')
+  print('Logits avg diff: {}'.format(np.mean(logits_onnx - logits_pytorch)))
 
   # openvino
   print('==== openvino ====')
   convert_onnx_to_openvino(args.model_name)
-  run_inference_openvino(args.model_name, npz_file)
+  logits_openvino = run_inference_openvino(args.model_name, npz_file)
+  print_logits(logits_openvino, args.model_name, 'openvino')
+  print('Logits avg diff: {}'.format(np.mean(logits_openvino - logits_pytorch)))
   print('==== openvino speed test ====')
   openvino_speed_test(args.model_name)
-

@@ -178,7 +178,9 @@ class EfficientNet(nn.Module):
         x = self.extract_features(inputs)
 
         # Pooling and final linear layer
-        x = F.adaptive_avg_pool2d(x, 1).squeeze(-1).squeeze(-1)
+        #x = F.adaptive_avg_pool2d(x, 1).squeeze(-1).squeeze(-1)
+        x = x.mean(3)
+        x = x.mean(2)
         if self._dropout:
             x = F.dropout(x, p=self._dropout, training=self.training)
         x = self._fc(x)
