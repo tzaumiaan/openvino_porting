@@ -6,7 +6,6 @@ import onnx
 import onnxruntime
 from openvino.inference_engine import IENetwork, IEPlugin
 from datetime import datetime
-import os
 
 from model_utils import count_param_size, count_flops, get_model, get_trans
 
@@ -80,8 +79,12 @@ def run_inference_onnx(model_name, npz_file):
   return logits
 
 def convert_onnx_to_openvino(model_name):
+  import sys
+  if sys.platform == 'win32':
+    mo_py = '\"C:\Program Files (x86)\IntelSWTools\openvino\deployment_tools\model_optimizer\mo.py\"'
+  else:
+    mo_py = '/opt/intel/openvino/deployment_tools/model_optimizer/mo.py'
   onnx_file = 'model_{}.onnx'.format(model_name)
-  mo_py = '/opt/intel/openvino/deployment_tools/model_optimizer/mo.py'
   options = ''
   #options += ' --disable_fusing'
   #options += ' --disable_resnet_optimization'
@@ -109,11 +112,11 @@ def load_openvino_model(device, model_xml, model_bin):
 def print_perf_counts(exec_net):
   perf_counts = exec_net.requests[0].get_perf_counts()
   print('OpenVINO performance report')
-  print("{:<70} {:<15} {:<15} {:<15} {:<10}".format('name', 'layer_type', 'exet_type', 'status', 'real_time, us'))
+  #print("{:<70} {:<15} {:<15} {:<15} {:<10}".format('name', 'layer_type', 'exet_type', 'status', 'real_time, us'))
   layer_dict = {}
   for layer, stats in perf_counts.items():
-    print("{:<70} {:<15} {:<15} {:<15} {:<10}".format(
-        layer, stats['layer_type'], stats['exec_type'], stats['status'], stats['real_time']))
+    #print("{:<70} {:<15} {:<15} {:<15} {:<10}".format(
+    #    layer, stats['layer_type'], stats['exec_type'], stats['status'], stats['real_time']))
     if stats['layer_type'] in layer_dict:
       layer_dict[stats['layer_type']] += int(stats['real_time'])
     else:
@@ -125,7 +128,7 @@ def print_perf_counts(exec_net):
   print('{:<15} {:<10} {:<10}'.format('layer_type', 'real_time', 'percentage'))
   for i in ranking:
     print('{:<15} {:>10} {:>10.6f}%'.format(layer_types[i], layer_times[i], layer_time_ratio[i]*100))
-      
+  print('IE inference time {:0.3f}ms'.format(np.sum(layer_times)*1e-3))
 
 def run_inference_openvino(model_name, npz_file):
   # input np array
@@ -167,7 +170,7 @@ def openvino_speed_test(model_name):
     if i%100 == 0:
         print('trial {} takes {:0.4f}secs: logit={:.5f} label={}'.format(i, dt, logits[top1], labelmap[top1]))
 
-  print('average inference time {:0.4f}secs'.format(exec_time/(n_trials-n_warmup)))
+  print('average inference time {:.1f}ms'.format(exec_time/(n_trials-n_warmup)*1e3))
   
   print_perf_counts(exec_net)
   
