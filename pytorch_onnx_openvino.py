@@ -24,7 +24,7 @@ def run_inference_pytorch(image_file, model, trans):
     image_tensor = image_tensor.cuda()
 
   logits_tensor = model(image_tensor)
-  logits = logits_tensor.detach().numpy().squeeze()
+  logits = logits_tensor.cpu().detach().numpy().squeeze()
   return logits
 
 def print_logits(logits, model_name, framework_name, k=5):
